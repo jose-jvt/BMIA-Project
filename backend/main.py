@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Any, Dict
 import io
 import base64
+from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 
 # Para procesar .nii
@@ -17,6 +18,7 @@ import scipy.io as sio
 from PIL import Image
 import numpy as np
 import os, sys
+import uuid
 
 # PyTorch
 import torch
@@ -25,6 +27,7 @@ from torchvision import transforms
 from types import SimpleNamespace
 from CNN_pretrained_model.AD_pretrained_utilities import CNN  # Clase del modelo ADNI
 import torch.nn as nn
+from scipy.io import loadmat
 
 # Determina la ruta base: si estamos en .exe, usa _MEIPASS; si no, __file__
 if getattr(sys, "frozen", False):
@@ -166,7 +169,7 @@ def load_image_bytes(file_bytes: bytes, filename: str) -> np.ndarray:
         ext = lower.rsplit(".", 1)[-1]
 
     # Rutas temporales para NIfTI
-    if ext in ("nii",):
+    if ext in ("nii"):
         import tempfile
 
         with tempfile.NamedTemporaryFile(suffix="." + ext, delete=False) as tmp:
@@ -189,23 +192,43 @@ def load_image_bytes(file_bytes: bytes, filename: str) -> np.ndarray:
 
     # Archivos MATLAB
     elif ext == "mat":
-        # Cargar diccionario de variables
-        mat = sio.loadmat(
-            io.BytesIO(file_bytes), squeeze_me=True, struct_as_record=False
-        )
-        # Intentar extraer la variable de interés
-        if "volume" in mat:
-            vol = mat["volume"]
-        else:
-            # Si no existe 'volume', tomar la primera matriz de 3D que encuentre
-            vols = [
-                v for v in mat.values() if isinstance(v, np.ndarray) and v.ndim == 3
-            ]
-            if not vols:
-                raise ValueError("No se encontró una variable de volumen 3D en el .mat")
-            vol = vols[0]
-        return np.array(vol, dtype=np.float32)
 
+        # Definimos el directorio tmp y lo creamos si no existe
+        tmp_dir = Path("tmp")
+        # tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generamos un nombre único
+        unique_name = f"{uuid.uuid4().hex}.mat"
+        tmp_path = tmp_dir / unique_name
+
+        # Escribimos el fichero
+        tmp_path.write_bytes(file_bytes)
+
+        try:
+            # Cargamos el .mat
+            mat = loadmat(tmp_path, squeeze_me=True, struct_as_record=False)
+            print("1")
+
+            if "volume" in mat:
+                vol = mat["volume"]
+                print("2")
+            else:
+                connectivity = mat["connectivity"]
+                print("3")
+                # if not connectivity:
+                #     raise ValueError(
+                #         "No se encontró una variable de volumen 3D en el .mat"
+                #     )
+                print("4")
+
+            return np.array(connectivity, dtype=np.float32)
+        finally:
+            # Siempre limpiamos
+            try:
+                # tmp_path.unlink()
+                pass
+            except OSError:
+                pass
     else:
         raise ValueError(f"Formato no soportado: .{ext}")
 
