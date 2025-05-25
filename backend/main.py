@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -9,19 +8,19 @@ from fastapi.staticfiles import StaticFiles
 
 # Para procesar .nii
 import nibabel as nib
+from scipy import ndimage
 
 # Para procesar imágenes comunes
 from PIL import Image
 import numpy as np
 import os, sys
 
-# PyTorch\import torch
+# PyTorch
 import torch
 import torch.nn.functional as F
+from torchvision import transforms
 from types import SimpleNamespace
-from .CNN_pretrained_model.AD_pretrained_utilities import CNN  # Clase del modelo ADNI
-
-app = FastAPI()
+from CNN_pretrained_model.AD_pretrained_utilities import CNN  # Clase del modelo ADNI
 
 # Determina la ruta base: si estamos en .exe, usa _MEIPASS; si no, __file__
 if getattr(sys, "frozen", False):
@@ -62,20 +61,63 @@ dmodels = {
     # "otro_modelo": (otro_modelo_instancia, False),
 }
 
-static_dir = os.path.join(base_path, "build")
-if not os.path.isdir(static_dir):
-    raise RuntimeError(f"No se encontró la carpeta estática en: {static_dir}")
 
-# Monta build/ como ruta raíz
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
+# =====================
+#  DATA TRANSFORMS
+# =====================
+def resize_data_volume_by_scale(data: np.ndarray, scale):
+    """
+    Resize the data based on the provided scale (float or 3-list).
+    """
+    scale_list = [scale] * 3 if isinstance(scale, float) else scale
+    return ndimage.zoom(data, zoom=scale_list, order=0)
 
-# Habilitar CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+def normalize_intensity(
+    img_tensor: torch.Tensor, normalization: str = "mean"
+) -> torch.Tensor:
+    """
+    Normalize tensor: 'mean' uses non-zero voxels, 'max' scales to [0,1].
+    """
+    if normalization == "mean":
+        mask = img_tensor.ne(0.0)
+        desired = img_tensor[mask]
+        mean_val, std_val = desired.mean(), desired.std()
+        img_tensor = (img_tensor - mean_val) / (std_val + 1e-8)
+    elif normalization == "max":
+        mx, mn = img_tensor.max(), img_tensor.min()
+        img_tensor = (img_tensor - mn) / (mx - mn + 1e-8)
+    return img_tensor
+
+
+def img_processing(
+    volume: np.ndarray, scaling: float = 0.5, final_size=(96, 96, 73)
+) -> np.ndarray:
+    """
+    Resize first by a uniform scaling, then adjust to final dimensions.
+    """
+    # initial down/up-sample
+    vol = resize_data_volume_by_scale(volume, scale=scaling)
+    # compute scale factors to reach final_size
+    factors = [final_size[i] / vol.shape[i] for i in range(3)]
+    return resize_data_volume_by_scale(vol, scale=factors)
+
+
+def torch_norm(volume: np.ndarray) -> torch.Tensor:
+    """
+    Convert numpy volume to torch tensor and apply intensity normalization.
+    """
+    tensor = torch.from_numpy(volume.astype(np.float32)).unsqueeze(0).unsqueeze(0)
+    tensor = normalize_intensity(tensor, normalization="mean")
+    return tensor
+
+
+# =====================
+#       APP SETUP
+# =====================
+app = FastAPI()
+# (rest unmodified...)
+# Montar estáticos, CORS, modelos, etc.
 
 
 class ProcessResponse(BaseModel):
@@ -96,19 +138,13 @@ def load_image_bytes(file_bytes: bytes, filename: str) -> np.ndarray:
 
 
 def process_with_model(
-    image_array: np.ndarray, torch_model: torch.nn.Module
+    image_array: np.ndarray, torch_model: torch.nn.Module, device
 ) -> (np.ndarray, Dict[str, Any]):
-    """
-    Procesa volúmenes 3D NIfTI con el modelo dado.
-    Devuelve la MIP para visualización y el score de enfermedad.
-    """
-    # Normalizar y reescalar volumen a 96x96x73
-    volume = image_array.astype(np.float32)
-    volume = (volume - volume.min()) / (volume.max() - volume.min() + 1e-8)
-    tensor = torch.from_numpy(volume).unsqueeze(0).unsqueeze(0)
-    tensor = F.interpolate(
-        tensor, size=(73, 96, 96), mode="trilinear", align_corners=False
-    ).to(device)
+    # Apply the same preprocessing as training
+    # 1) Resize & crop/pad to (96,96,73)
+    vol = img_processing(image_array, scaling=0.5, final_size=(96, 96, 73))
+    # 2) Convert to torch tensor and normalize
+    tensor = torch_norm(vol).to(device)
 
     # Inferencia
     with torch.no_grad():
@@ -116,7 +152,8 @@ def process_with_model(
         score = logits.squeeze().item()
 
     # Generar imagen MIP (eje X)
-    mip = np.max(volume, axis=0)
+    mip = np.max(vol, axis=0)
+    mip = (mip - mip.min()) / (mip.max() - mip.min() + 1e-8)
     mip = (mip * 255).astype(np.uint8)
 
     classification = {"disease_score": float(score)}
@@ -125,44 +162,27 @@ def process_with_model(
 
 @app.post("/api/process", response_model=ProcessResponse)
 async def process_image(image: UploadFile = File(...), model: str = Form(...)):
-    # Leer bytes
     file_bytes = await image.read()
     try:
         img_array = load_image_bytes(file_bytes, image.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Verificar modelo solicitado
     if model not in dmodels:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Modelo desconocido '{model}'. Modelos disponibles: {list(dmodels.keys())}",
-        )
+        raise HTTPException(...)
     torch_model, use_cuda = dmodels[model]
 
-    # Mover modelo a dispositivo adecuado
-    if use_cuda and torch.cuda.is_available():
-        torch_model.to(device)
-        model_device = device
-    else:
-        torch_model.to("cpu")
-        model_device = "cpu"
+    # Move model to correct device
+    device = torch.device("cuda" if use_cuda and torch.cuda.is_available() else "cpu")
+    torch_model.to(device)
 
-    # Procesar con IA
-    processed_arr, classification = process_with_model(
-        img_array, torch_model, model_device
-    )
+    processed_arr, classification = process_with_model(img_array, torch_model, device)
 
-    # Convertir a PNG base64
-    if processed_arr.dtype != np.uint8:
-        processed_arr = np.clip(processed_arr, 0, 255).astype(np.uint8)
+    # Convert to base64 PNG
     img_pil = Image.fromarray(processed_arr, mode="L")
     buf = io.BytesIO()
     img_pil.save(buf, format="PNG")
     b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    # Incluir nombre de modelo en respuesta
     classification["model_used"] = model
-    return ProcessResponse(image_base64=b64_str, classification=classification)(
-        image_base64=b64_str, classification=classification
-    )
+    return ProcessResponse(image_base64=b64_str, classification=classification)

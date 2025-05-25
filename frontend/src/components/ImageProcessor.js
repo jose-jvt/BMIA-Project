@@ -8,9 +8,7 @@ export default function ImageProcessor() {
     const [loading, setLoading] = useState(false);
 
     const models = [
-        { value: 'model_v1', label: 'Modelo v1 (CNN)' },
-        { value: 'model_unet', label: 'Modelo U-Net' },
-        { value: 'model_custom', label: 'Modelo personalizado' },
+        { value: 'pretrained_ad', label: 'Modelo AD (CNN3D)' },
         // …otros modelos
     ];
 
@@ -33,7 +31,7 @@ export default function ImageProcessor() {
         form.append('model', model);
 
         try {
-            const res = await fetch('https://tu-backend/api/process', {
+            const res = await fetch('https://localhost:8000/api/process', {
                 method: 'POST',
                 body: form
             });
