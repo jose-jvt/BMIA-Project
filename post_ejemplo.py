@@ -3,8 +3,8 @@ import requests
 url = "http://localhost:8000/api/process"
 files = {
     "image": (
-        "imagen.png",
-        open("imagen.png", "rb"),
+        "Brainnectome.nii",
+        open("Brainnectome.nii", "rb"),
         "application/octet-stream",
     )
 }
