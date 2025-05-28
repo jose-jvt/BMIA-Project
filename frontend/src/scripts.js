@@ -163,10 +163,10 @@ async function finalizeExportProcess() {
     pendingNiftiFiles = [];
     currentModalFileIndex = 0;
 
-    // Add all processed files to the main container
-    selectedExportPaths.forEach(fileData => {
-        createFileItem(fileData.id, fileData.name, fileData.path, 'removeFile', elements.filesContainer);
-    });
+    // // Add all processed files to the main container
+    // selectedExportPaths.forEach(fileData => {
+    //     createFileItem(fileData.id, fileData.name, fileData.path, 'removeFile', elements.filesContainer);
+    // });
 
     // Update display
     toggleFileDisplay(elements.clearAllBtn, selectedFilePaths.length > 0 || selectedExportPaths.length > 0);
@@ -195,7 +195,7 @@ async function processExports() {
             showLoadingOverlay(`Processing: ${fileData.name} (${i + 1}/${selectedExportPaths.length})`);
 
             // Update file item status to processing
-            updateFileItemStatus(fileData.id, 'processing');
+            // updateFileItemStatus(fileData.id, 'processing');
 
             // Update results output
             elements.resultsOutput.value += `📄 Processing ${fileData.name}...\n`;
@@ -216,10 +216,10 @@ async function processExports() {
             console.log(response);
 
             // Update file item status to success
-            updateFileItemStatus(fileData.id, 'success');
+            // updateFileItemStatus(fileData.id, 'success');
 
             // Update results
-            elements.resultsOutput.value += `✅ Success: ${fileData.Message}\n`;
+            elements.resultsOutput.value += `✅ Success: ${response.message}\n`;
             elements.resultsOutput.value += '\n';
 
         } catch (error) {
@@ -241,19 +241,6 @@ async function processExports() {
     // Re-enable export button
     elements.uploadAndExportBtn.disabled = false;
     elements.uploadAndExportBtn.classList.remove('btn-loading');
-
-    // Final summary
-    elements.resultsOutput.value += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    elements.resultsOutput.value += `✨ Export process completed!\n`;
-    elements.resultsOutput.value += `   Total files: ${selectedExportPaths.length}\n`;
-
-    const successCount = elements.filesContainer.querySelectorAll('.file-item.success').length;
-    const errorCount = elements.filesContainer.querySelectorAll('.file-item.error').length;
-
-    elements.resultsOutput.value += `   ✅ Successful: ${successCount}\n`;
-    if (errorCount > 0) {
-        elements.resultsOutput.value += `   ❌ Failed: ${errorCount}\n`;
-    }
 
     elements.resultsOutput.scrollTop = elements.resultsOutput.scrollHeight;
 
