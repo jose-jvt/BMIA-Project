@@ -80,18 +80,16 @@ class MatFolderDataset(Dataset):
         mat_path = os.path.join(folder, mats[0])
         arr = load_mat_file(mat_path, self.data_key)
 
-        # Convertir a imagen 2D y transformar
-        img = Image.fromarray(arr).convert("L")
         if self.transform:
-            img = self.transform(img)
+            arr = self.transform(arr)
 
         target = torch.tensor(label, dtype=torch.float32)
-        return img, target
+        return arr, target / 30
 
 
 class RegressionCNN(nn.Module):
     def __init__(self):
-        super(RegressionCNN, self).__init__()
+        super().__init__()
         self.features = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
@@ -105,9 +103,10 @@ class RegressionCNN(nn.Module):
         )
         self.regressor = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64 * 32 * 32, 128),  # 256 input -> 128 -> 64 after three poolings
+            nn.Linear(64 * 30 * 30, 128),
             nn.ReLU(inplace=True),
             nn.Linear(128, 1),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -137,6 +136,7 @@ def validate(model, loader, criterion, device):
         for inputs, targets in loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
+            print(f"Outputs: {outputs}, targets: {targets}")
             loss = criterion(outputs, targets)
             running_loss += loss.item() * inputs.size(0)
     return running_loss / len(loader.dataset)
@@ -146,7 +146,6 @@ def main():
     # Transforms: resize to 256x256, convert to tensor, normalize to [0,1]
     transform = transforms.Compose(
         [
-            transforms.Resize((256, 256)),
             transforms.ToTensor(),
         ]
     )
@@ -167,14 +166,14 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = RegressionCNN().to(device)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
     best_val_loss = float("inf")
     for epoch in range(1, 100 + 1):
         train_loss = train(model, train_loader, criterion, optimizer, device)
         val_loss = validate(model, val_loader, criterion, device)
         print(
-            f"Epoch {epoch}/{100} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}"
+            f"Epoch {epoch}/{10000} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}"
         )
 
         # Save best model

@@ -22,7 +22,7 @@ const createWindow = () => {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
-  mainWindow.webContents.openDevTools(); // Optional
+  // mainWindow.webContents.openDevTools(); // Optional
 };
 
 app.whenReady().then(() => {
