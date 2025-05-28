@@ -30,7 +30,7 @@ from scipy.io import loadmat
 from train import RegressionCNN
 
 
-def load_image_bytes(file_bytes: bytes, filename: str) -> np.ndarray:
+def load_image_bytes(file_bytes: bytes) -> np.ndarray:
     # Definimos el directorio tmp y lo creamos si no existe
     tmp_dir = Path("tmp")
     # tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -61,11 +61,18 @@ def process_with_model(mat_array: np.ndarray, torch_model: torch.nn.Module, devi
     return classification
 
 
-def model_inference(image, model):
+def model_inference(image, model_path):
     # Inicializar dispositivo
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Cargar modelo ADNI preentrenado en CPU (carga inicial)
-    model = RegressionCNN()
+
+    # Instanciar y cargar pesos
+    model = RegressionCNN().to(device)
+    try:
+        state = torch.load(model_path, map_location=device)
+        model.load_state_dict(state)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cargando modelo: {e}")
+    model.eval()
 
     file_bytes = image.read()
     try:
@@ -77,4 +84,4 @@ def model_inference(image, model):
 
     classification = process_with_model(mat_array, model, device)
 
-    return ProcessResponse(image_base64=b64_str, classification=classification)
+    return classification
