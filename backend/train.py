@@ -11,58 +11,8 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 import scipy.io as sio
 
-data_subdirs = [
-    1,
-    2,
-    3,
-    4,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    24,
-    25,
-    26,
-    27,
-    29,
-    30,
-    31,
-    32,
-    33,
-    34,
-    36,
-    37,
-    38,
-    40,
-    41,
-    42,
-    43,
-    44,
-    46,
-    47,
-    48,
-    49,
-    52,
-    53,
-    55,
-    58,
-    60,
-]
-# csv_dataset = pd.read_csv("Dataset\\PDAM_DemografGeral.csv")
 
-
-def load_mat_file(path, data_key=None, label_key=None):
+def load_mat_file(path, data_key=None):
     """
     Carga un .mat y extrae el volumen y el label.
     Si data_key es None, busca 'volume' o 'connectivity'.
@@ -164,34 +114,6 @@ class RegressionCNN(nn.Module):
         x = self.features(x)
         x = self.regressor(x)
         return x.squeeze(1)
-
-
-class ImageRegressionDataset(Dataset):
-    def __init__(self, csv_file, root_dir, transform=None):
-        """
-        csv_file: Path to CSV with columns ['filename', 'label']
-        root_dir: Directory with image files.
-        """
-        self.annotations = pd.read_csv(csv_file)
-        self.root_dir = root_dir
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.annotations)
-
-    def __getitem__(self, idx):
-        row = self.annotations.iloc[idx]
-        img_path = os.path.join(self.root_dir, str(int(row["ID"][-3:])))
-        # Load as grayscale
-        image = Image.open(img_path).convert("L")
-        print(f"image.shape: {image.size()}")
-        if self.transform:
-            image = self.transform(image)
-        label = torch.tensor(row["label"], dtype=torch.float32)
-        print(
-            f"Loading {img_path} with label {label.item()}, image.shape: {image.size()}"
-        )
-        return image, label
 
 
 def train(model, loader, criterion, optimizer, device):
