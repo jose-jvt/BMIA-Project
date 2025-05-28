@@ -43,6 +43,60 @@ const elements = {
     modalSubmit: document.getElementById('modalSubmit')
 };
 
+// Backend API
+class BackendAPI {
+    constructor(baseUrl = 'http://localhost:3000/api') {
+        this.baseUrl = baseUrl;
+        this.timeout = 30000; // 30 segundos
+    }
+
+    async exportToConnectivityMatrix(config) {
+        try {
+            const response = await fetch(`${this.baseUrl}/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config),
+                timeout: this.timeout
+            });
+
+            if (!response.ok) {
+                throw new Error(`Backend error: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Export error:', error);
+            throw error;
+        }
+    }
+
+    async runPyTorchModel(config) {
+        try {
+            const response = await fetch(`${this.baseUrl}/execute_model`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config),
+                timeout: this.timeout
+            });
+
+            if (!response.ok) {
+                throw new Error(`Backend error: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Model run error:', error);
+            throw error;
+        }
+    }
+}
+
+const api = new BackendAPI();
+
 // Modal functions
 function showNiftiModal(filename) {
     elements.modalFilename.textContent = filename;
@@ -84,58 +138,28 @@ function finalizeExportProcess() {
     showExportResults();
 }
 
-function showExportResults() {
+async function showExportResults() {
     // Display export execution results
-    elements.resultsOutput.value = '=== EXPORT TO CONNECTIVITY MATRIX EXECUTION ===\n\n';
-    elements.resultsOutput.value += '📁 PROCESSED FILES FOR EXPORT:\n';
     
     selectedExportPaths.forEach((fileData, index) => {
-        elements.resultsOutput.value += `${index + 1}. ${fileData.name}\n`;
-        elements.resultsOutput.value += `   Full Path: ${fileData.path}\n`;
-        
-        if (fileData.bval || fileData.bvec) {
-            elements.resultsOutput.value += `   Associated Files:\n`;
-            if (fileData.bval) elements.resultsOutput.value += `     - bval: ${fileData.bval}\n`;
-            if (fileData.bvec) elements.resultsOutput.value += `     - bvec: ${fileData.bvec}\n`;
+
+        // Call API
+        let config = {
+            dmriFile: fileData.path,
+            bval: fileData.bval || '',
+            bvec: fileData.bvec || '',
+            processingMethod: elements.processingMethod.value,
+            dsiPath: elements.dsiPathDisplay.textContent !== 'No DSI Studio path selected - Click me!' ?
+                elements.dsiPathDisplay.textContent : null
         }
-        elements.resultsOutput.value += '\n';
+        const response = api.exportToConnectivityMatrix(config)
     });
-    
-    elements.resultsOutput.value += '⚙️ EXPORT CONFIGURATION:\n';
-    elements.resultsOutput.value += `Selected Atlas: ${elements.processingMethod.value}\n`;
-    elements.resultsOutput.value += `DSI Studio Path: ${elements.dsiPathDisplay.textContent}\n\n`;
-    
-    elements.resultsOutput.value += '✅ READY FOR EXPORT:\n';
-    elements.resultsOutput.value += `Files to process: ${selectedExportPaths.length}\n`;
-    elements.resultsOutput.value += `Atlas configured: ${elements.processingMethod.value ? 'YES' : 'NO'}\n`;
-    elements.resultsOutput.value += `DSI Studio configured: ${!elements.dsiPathDisplay.textContent.includes('No DSI Studio') ? 'YES' : 'NO'}\n\n`;
-    
-    elements.resultsOutput.value += '🚀 Export process completed with the above configuration...\n';
-    elements.resultsOutput.value += 'Ready to generate connectivity matrices from processed dMRI files.\n';
 }
 
 // Utility functions
 function preventDefaults(e) {
     e.preventDefault();
     e.stopPropagation();
-}
-
-function createDragDropHandlers(area, processFunction) {
-    return {
-        dragover: (e) => {
-            e.preventDefault();
-            area.classList.add('dragover');
-        },
-        dragleave: (e) => {
-            e.preventDefault();
-            area.classList.remove('dragover');
-        },
-        drop: (e) => {
-            e.preventDefault();
-            area.classList.remove('dragover');
-            processFunction(e.dataTransfer.files);
-        }
-    };
 }
 
 function createFileItem(id, name, path, removeFunction, container) {
@@ -198,66 +222,6 @@ function updateDSIPathStyling() {
         dsiPathDisplay.classList.add('unconfigured');
     }
 }
-
-// Backend API class
-class BackendAPI {
-    constructor(baseUrl = 'http://localhost:3000/api') {
-        this.baseUrl = baseUrl;
-    }
-
-    async uploadFiles(files, fileType = 'dmri') {
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files', file.file);
-        });
-        formData.append('fileType', fileType);
-
-        try {
-            const response = await fetch(`${this.baseUrl}/upload`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Upload failed:', error);
-            throw error;
-        }
-    }
-
-    async runAnalysis(config) {
-        try {
-            const response = await fetch(`${this.baseUrl}/analyze`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(config)
-            });
-            
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Analysis failed:', error);
-            throw error;
-        }
-    }
-
-    async getAnalysisStatus(jobId) {
-        try {
-            const response = await fetch(`${this.baseUrl}/status/${jobId}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Status check failed:', error);
-            throw error;
-        }
-    }
-}
-
-// Initialize API client
-const api = new BackendAPI();
 
 // File processing functions - now only store paths locally
 function processFiles(files, fileType = 'dmri') {
@@ -439,7 +403,7 @@ function initializeEventListeners() {
         pendingNiftiFiles = [];
         currentModalFileIndex = 0;
         selectedExportPaths = [];
-        
+
         elements.resultsOutput.value = '❌ Export process cancelled by user.\n';
     });
 
@@ -560,20 +524,6 @@ function initializeEventListeners() {
 
             toggleFileDisplay(elements.clearAllBtn, selectedFilePaths.length > 0);
             
-            // Show success message in results
-            elements.resultsOutput.value = '=== CONNECTIVITY MATRIX UPLOAD ===\n\n';
-            elements.resultsOutput.value += '📊 UPLOADED CONNECTIVITY MATRICES:\n';
-            
-            filePaths.forEach((path, index) => {
-                const fileName = path.split(/[\\/]/).pop();
-                elements.resultsOutput.value += `${index + 1}. ${fileName}\n`;
-                elements.resultsOutput.value += `   Path: ${path}\n`;
-                elements.resultsOutput.value += `   Type: Connectivity Matrix (.mat)\n\n`;
-            });
-            
-            elements.resultsOutput.value += `✅ Successfully uploaded ${filePaths.length} connectivity matrix file(s).\n`;
-            elements.resultsOutput.value += 'Ready for analysis with PyTorch models.\n';
-            
         } catch (error) {
             console.error('CM file selection error:', error);
             alert('Error selecting connectivity matrix files. Please try again.');
@@ -669,12 +619,6 @@ function initializeEventListeners() {
                 pendingNiftiFiles = niftiFiles;
                 currentModalFileIndex = 0;
                 
-                // Start showing results
-                elements.resultsOutput.value = '=== PROCESSING FILES FOR EXPORT ===\n\n';
-                elements.resultsOutput.value += `📁 Found ${niftiFiles.length} NIfTI file(s) requiring additional information.\n`;
-                elements.resultsOutput.value += `📁 Found ${otherFiles.length} other file(s) ready for processing.\n\n`;
-                elements.resultsOutput.value += '⏳ Please provide .bval and .bvec information for each NIfTI file...\n';
-                
                 // Start the modal process
                 processNextNiftiFile();
             } else {
@@ -766,20 +710,6 @@ function initializeEventListeners() {
 
             toggleFileDisplay(elements.clearAllBtn2, selectedModelPaths.length > 0);
             
-            // Show success message in results
-            elements.resultsOutput.value = '=== PYTORCH MODELS UPLOAD ===\n\n';
-            elements.resultsOutput.value += '🔥 UPLOADED PYTORCH MODELS:\n';
-            
-            filePaths.forEach((path, index) => {
-                const fileName = path.split(/[\\/]/).pop();
-                elements.resultsOutput.value += `${index + 1}. ${fileName}\n`;
-                elements.resultsOutput.value += `   Path: ${path}\n`;
-                elements.resultsOutput.value += `   Type: PyTorch Model (.pth)\n\n`;
-            });
-            
-            elements.resultsOutput.value += `✅ Successfully uploaded ${filePaths.length} PyTorch model file(s).\n`;
-            elements.resultsOutput.value += 'Ready for analysis with connectivity matrices.\n';
-            
         } catch (error) {
             console.error('PyTorch model file selection error:', error);
             alert('Error selecting PyTorch model files. Please try again.');
@@ -843,30 +773,6 @@ function initializeEventListeners() {
         
         elements.resultsOutput.value = '=== ANALYSIS STARTED ===\n\n';
         
-        // Display selected files
-        if (selectedFilesList.length > 0) {
-            elements.resultsOutput.value += '📁 SELECTED dMRI FILES:\n';
-            selectedFilesList.forEach((file, index) => {
-                elements.resultsOutput.value += `${index + 1}. ${file.name}\n`;
-                elements.resultsOutput.value += `   Path: ${file.path || 'N/A'}\n`;
-                elements.resultsOutput.value += `   ID: ${file.id}\n\n`;
-            });
-        } else {
-            elements.resultsOutput.value += '⚠️  No dMRI files selected\n\n';
-        }
-        
-        // Display selected models
-        if (selectedModelsList.length > 0) {
-            elements.resultsOutput.value += '🔥 SELECTED PYTORCH MODELS:\n';
-            selectedModelsList.forEach((model, index) => {
-                elements.resultsOutput.value += `${index + 1}. ${model.name}\n`;
-                elements.resultsOutput.value += `   Path: ${model.path || 'N/A'}\n`;
-                elements.resultsOutput.value += `   ID: ${model.id}\n\n`;
-            });
-        } else {
-            elements.resultsOutput.value += '⚠️  No PyTorch models selected\n\n';
-        }
-        
         // Configuration info
         elements.resultsOutput.value += '⚙️  CONFIGURATION:\n';
         elements.resultsOutput.value += `Atlas: ${elements.processingMethod.value || 'None selected'}\n`;
@@ -874,10 +780,9 @@ function initializeEventListeners() {
         
         // Summary
         elements.resultsOutput.value += '📊 SUMMARY:\n';
-        elements.resultsOutput.value += `Total dMRI files selected: ${selectedFilesList.length}\n`;
-        elements.resultsOutput.value += `Total PyTorch models selected: ${selectedModelsList.length}\n`;
-        elements.resultsOutput.value += `Ready for processing: ${selectedFilesList.length > 0 && selectedModelsList.length > 0 ? 'YES ✅' : 'NO ❌'}\n\n`;
-        
+        elements.resultsOutput.value += `Connectivity Matrix selected: ${selectedFilesList.length}\n`;
+        elements.resultsOutput.value += `PyTorch model selected: ${selectedModelsList.length}\n`;
+
         if (selectedFilesList.length > 0 && selectedModelsList.length > 0) {
             elements.resultsOutput.value += '🚀 Starting backend analysis...\n';
             
@@ -886,19 +791,12 @@ function initializeEventListeners() {
                     dmriFiles: selectedFilesList,
                     pytorchModels: selectedModelsList,
                     processingMethod: elements.processingMethod.value,
-                    dsiPath: elements.dsiPathDisplay.textContent !== 'No DSI Studio path selected - Click me!' ? 
-                            elements.dsiPathDisplay.textContent : null
                 };
 
-                elements.resultsOutput.value += 'Submitting job to backend...\n';
-                const result = await api.runAnalysis(config);
-                
-                elements.resultsOutput.value += `✅ Analysis submitted successfully!\n`;
-                elements.resultsOutput.value += `Job ID: ${result.jobId || 'N/A'}\n`;
+                const result = await api.runPyTorchModel(config);
                 
             } catch (error) {
                 elements.resultsOutput.value += `❌ Backend Error: ${error.message}\n`;
-                elements.resultsOutput.value += 'Note: This demo shows selected files even without a real backend.\n';
             }
         } else {
             elements.resultsOutput.value += '❌ Cannot start analysis: Need at least one file AND one model selected.\n';
