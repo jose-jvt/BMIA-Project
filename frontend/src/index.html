@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mi Primera App - Tres Secciones Horizontales</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Section 1 - dMRI Files -->
+        <div class="section-wrapper">
+            <div class="section">
+                <div class="section-main-content">
+                    <div class="section-content">
+                        <div class="icon">🧠</div>
+                        <button class="btn upload-btn" id="uploadBtn">Upload CM</button>
+                        <button class="btn export-btn" id="uploadAndExportBtn">Upload dMRI and export to CM</button>
+                        <button class="btn clear-all-btn" id="clearAllBtn" style="display: none;">Clear All</button>
+                    </div>
+                    
+                    <div class="file-list" id="fileList">
+                        <h3 class="list-title">Added Files:</h3>
+                        <div class="files-container" id="filesContainer"></div>
+                    </div>
+                    
+                    <input type="file" id="fileInput" accept=".mat" style="display: none;" multiple>
+                </div>
+
+                <div class="section-bottom-controls">
+                    <select class="bottom-dropdown" id="processingMethod">
+                        <option value="">Select Atlas</option>
+                        <option value="dti">DTI Analysis</option>
+                    </select>
+                    <div class="dsi-browse-container">
+                        <div class="dsi-path-display" id="dsiPathDisplay">No DSI Studio path selected - Click me!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2 - PyTorch Models -->
+            <div class="section">
+                <div class="section-main-content">
+                    <div class="section-content">
+                        <div class="icon">🔥</div>
+                        <button class="btn upload-btn" id="uploadBtn2">Upload PyTorch Models</button>
+                        <button class="btn clear-all-btn" id="clearAllBtn2" style="display: none;">Clear All</button>
+                    </div>
+                    
+                    <div class="file-list" id="fileList2">
+                        <h3 class="list-title">Added Models:</h3>
+                        <div class="files-container" id="filesContainer2"></div>
+                    </div>
+                    
+                    <input type="file" id="fileInput2" accept=".pth" style="display: none;" multiple>
+                </div>
+            </div>    
+        </div>
+
+        <!-- Run and Results Section -->
+        <div class="run-results-section">
+            <button class="btn run-btn" id="runBtn">Run</button>
+            <div class="results-box">
+                <h3 class="results-title">Results</h3>
+                <textarea class="result-output" id="resultsOutput" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+
+    <!-- Modal for NIfTI input -->
+    <div id="niftiModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Additional Information Required</h3>
+                <div id="modalFilename" class="modal-filename">Filename will appear here</div>
+            </div>
+            
+            <form class="modal-form">
+                <div class="modal-field">
+                    <label class="modal-label" for="niftiItem1">File ".bval":</label>
+                    <input type="text" id="niftiItem1" class="modal-input" placeholder="Enter .bval..." />
+                </div>
+                
+                <div class="modal-field">
+                    <label class="modal-label" for="niftiItem2">File ".bvec"</label>
+                    <input type="text" id="niftiItem2" class="modal-input" placeholder="Enter .bvec..." />
+                </div>
+            </form>
+            
+            <div class="modal-actions">
+                <button id="modalCancel" class="modal-btn modal-btn-secondary">Cancel</button>
+                <button id="modalSubmit" class="modal-btn modal-btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
