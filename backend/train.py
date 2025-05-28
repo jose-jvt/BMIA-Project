@@ -180,8 +180,8 @@ def main():
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), "modelo.pt")
-            print(f"Saved Best Model to {'modelo.pt'}")
+            torch.save(model.state_dict(), "modelo.pth")
+            print(f"Saved Best Model to {'modelo.pth'}")
 
 
 if __name__ == "__main__":
