@@ -86,7 +86,7 @@ def model_inference(matrix_path, model_path):
 
 if __name__ == "__main__":
     resultado = model_inference(
-        matrix_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\Dataset\\1\\whole_brain_ROIs.mat",
+        matrix_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\Dataset\\6\\whole_brain_ROIs.mat",
         model_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\backend\\modelo.pth",
     )
     print(resultado)

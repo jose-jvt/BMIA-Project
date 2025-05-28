@@ -54,7 +54,7 @@ class MatFolderDataset(Dataset):
         self.root_dir = root_dir
         self.ids = self.df["last3"].tolist()
         self.data_key = data_key
-        self.label_col = "MoCA"
+        self.label_col = "Sexo"
         self.transform = transform
 
     def __len__(self):
@@ -84,7 +84,7 @@ class MatFolderDataset(Dataset):
             arr = self.transform(arr)
 
         target = torch.tensor(label, dtype=torch.float32)
-        return arr, target / 30
+        return arr, target
 
 
 class RegressionCNN(nn.Module):
@@ -136,7 +136,7 @@ def validate(model, loader, criterion, device):
         for inputs, targets in loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
-            print(f"Outputs: {outputs}, targets: {targets}")
+            # print(f"Outputs: {outputs}, targets: {targets}")
             loss = criterion(outputs, targets)
             running_loss += loss.item() * inputs.size(0)
     return running_loss / len(loader.dataset)
@@ -156,7 +156,7 @@ def main():
         transform=transform,
     )
     # Split
-    val_size = int(len(dataset) * 0.2)
+    val_size = int(len(dataset) * 0.15)
     train_size = len(dataset) - val_size
     train_set, val_set = random_split(dataset, [train_size, val_size])
 
@@ -165,11 +165,11 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = RegressionCNN().to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00001)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.00002)
 
     best_val_loss = float("inf")
-    for epoch in range(1, 100 + 1):
+    for epoch in range(1, 1000 + 1):
         train_loss = train(model, train_loader, criterion, optimizer, device)
         val_loss = validate(model, val_loader, criterion, device)
         print(
