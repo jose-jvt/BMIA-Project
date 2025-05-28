@@ -48,7 +48,10 @@ const elements = {
 
     // Loading overlay elements
     loadingOverlay: document.getElementById('loadingOverlay'),
-    loadingFilename: document.getElementById('loadingFilename')
+    loadingFilename: document.getElementById('loadingFilename'),
+
+    executingOverlay: document.getElementById('executingOverlay'),
+    executingModel: document.getElementById('executingModel')
 };
 
 // Backend API
@@ -111,8 +114,17 @@ function showLoadingOverlay(filename = 'Processing...') {
     elements.loadingFilename.textContent = filename;
 }
 
+function showExecutingOverlay(modelName = 'Model') {
+    elements.executingOverlay.classList.add('show');
+    elements.executingModel.textContent = modelName;
+}
+
 function hideLoadingOverlay() {
     elements.loadingOverlay.classList.remove('show');
+}
+
+function hideExecutingOverlay() {
+    elements.executingOverlay.classList.remove('show');
 }
 
 function updateLoadingMessage(filename) {
@@ -163,10 +175,10 @@ async function finalizeExportProcess() {
     pendingNiftiFiles = [];
     currentModalFileIndex = 0;
 
-    // Add all processed files to the main container
-    selectedExportPaths.forEach(fileData => {
-        createFileItem(fileData.id, fileData.name, fileData.path, 'removeFile', elements.filesContainer);
-    });
+    // // Add all processed files to the main container
+    // selectedExportPaths.forEach(fileData => {
+    //     createFileItem(fileData.id, fileData.name, fileData.path, 'removeFile', elements.filesContainer);
+    // });
 
     // Update display
     toggleFileDisplay(elements.clearAllBtn, selectedFilePaths.length > 0 || selectedExportPaths.length > 0);
@@ -195,7 +207,7 @@ async function processExports() {
             showLoadingOverlay(`Processing: ${fileData.name} (${i + 1}/${selectedExportPaths.length})`);
 
             // Update file item status to processing
-            updateFileItemStatus(fileData.id, 'processing');
+            // updateFileItemStatus(fileData.id, 'processing');
 
             // Update results output
             elements.resultsOutput.value += `📄 Processing ${fileData.name}...\n`;
@@ -213,13 +225,11 @@ async function processExports() {
 
             const response = await api.exportToConnectivityMatrix(config);
 
-            console.log(response);
-
             // Update file item status to success
-            updateFileItemStatus(fileData.id, 'success');
+            // updateFileItemStatus(fileData.id, 'success');
 
             // Update results
-            elements.resultsOutput.value += `✅ Success: ${fileData.Message}\n`;
+            elements.resultsOutput.value += `✅ Success: ${response.message}\n`;
             elements.resultsOutput.value += '\n';
 
         } catch (error) {
@@ -241,19 +251,6 @@ async function processExports() {
     // Re-enable export button
     elements.uploadAndExportBtn.disabled = false;
     elements.uploadAndExportBtn.classList.remove('btn-loading');
-
-    // Final summary
-    elements.resultsOutput.value += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    elements.resultsOutput.value += `✨ Export process completed!\n`;
-    elements.resultsOutput.value += `   Total files: ${selectedExportPaths.length}\n`;
-
-    const successCount = elements.filesContainer.querySelectorAll('.file-item.success').length;
-    const errorCount = elements.filesContainer.querySelectorAll('.file-item.error').length;
-
-    elements.resultsOutput.value += `   ✅ Successful: ${successCount}\n`;
-    if (errorCount > 0) {
-        elements.resultsOutput.value += `   ❌ Failed: ${errorCount}\n`;
-    }
 
     elements.resultsOutput.scrollTop = elements.resultsOutput.scrollHeight;
 
@@ -870,9 +867,14 @@ function initializeEventListeners() {
 
     // Run button
     elements.runBtn.addEventListener('click', async () => {
+        // Prevent running if already in progress
+        if (elements.runBtn.disabled && elements.runBtn.classList.contains('btn-loading')) {
+            return;
+        }
+
         const selectedFilesList = Array.from(selectedFiles).map(id => {
             const file = selectedFilePaths.find(f => f.id === id);
-            return file ? {id: file.id, name: file.name, path: file.path} : null;
+            return file ? {id: file.id, name: file.name, path: file.path, type: file.type} : null;
         }).filter(Boolean);
 
         const selectedModelsList = Array.from(selectedModels).map(id => {
@@ -887,64 +889,99 @@ function initializeEventListeners() {
         if (selectedFilesList.length === 0 && selectedModelsList.length === 0) {
             elements.resultsOutput.value = 'Please select at least one file or model to run analysis.\n\n';
             elements.resultsOutput.value += 'How to select:\n';
-            elements.resultsOutput.value += '• Click on any added dMRI file to select it\n';
+            elements.resultsOutput.value += '• Click on any added connectivity matrix file to select it\n';
             elements.resultsOutput.value += '• Click on any added PyTorch model to select it\n';
             elements.resultsOutput.value += '• Selected items will be highlighted in blue with a checkmark\n';
             return;
         }
 
-        elements.resultsOutput.value = '=== ANALYSIS STARTED ===\n\n';
-
-        // Configuration info
-        elements.resultsOutput.value += '⚙️  CONFIGURATION:\n';
-        elements.resultsOutput.value += `Atlas: ${elements.processingMethod.value || 'None selected'}\n`;
-        elements.resultsOutput.value += `DSI Studio Path: ${elements.dsiPathDisplay.textContent}\n\n`;
-
-        // Summary
-        elements.resultsOutput.value += '📊 SUMMARY:\n';
-        elements.resultsOutput.value += `Connectivity Matrix selected: ${selectedFilesList.length}\n`;
-        elements.resultsOutput.value += `PyTorch model selected: ${selectedModelsList.length}\n`;
+        elements.resultsOutput.value = '=== EXECUTION STARTED ===\n\n';
 
         if (selectedFilesList.length > 0 && selectedModelsList.length > 0) {
-            elements.resultsOutput.value += '🚀 Starting backend analysis...\n';
-
             // Show loading for run button
             elements.runBtn.disabled = true;
             elements.runBtn.classList.add('btn-loading');
 
-            // Show loading overlay
-            showLoadingOverlay('Running PyTorch model analysis...');
+            // Disable all buttons during processing
+            elements.uploadBtn.disabled = true;
+            elements.uploadAndExportBtn.disabled = true;
+            elements.clearAllBtn.disabled = true;
+            elements.uploadBtn2.disabled = true;
+            elements.clearAllBtn2.disabled = true;
 
-            try {
-                const config = {
-                    dmriFiles: selectedFilesList,
-                    pytorchModels: selectedModelsList,
-                    processingMethod: elements.processingMethod.value,
-                };
+            for (const file of selectedFilesList) {
+                for (const model of selectedModelsList) {
 
-                const result = await api.runPyTorchModel(config);
+                    // Update loading overlay
+                    const loadingMessage = `Processing: ${file.name} with ${model.name}\n`;
+                    showExecutingOverlay(loadingMessage);
 
-                // Hide loading overlay
-                hideLoadingOverlay();
+                    // Update file status
+                    updateFileItemStatus(file.id, 'processing');
 
-                // Update results
-                elements.resultsOutput.value += '\n✅ Analysis completed successfully!\n';
-                if (result.output) {
-                    elements.resultsOutput.value += `\nResults:\n${result.output}\n`;
+                    // Update results in real-time
+                    elements.resultsOutput.value += `📄 Processing ${file.name} with model ${model.name}...\n`;
+                    elements.resultsOutput.scrollTop = elements.resultsOutput.scrollHeight;
+
+                    try {
+                        const config = {
+                            connectivityMatrix: {
+                                id: file.id,
+                                name: file.name,
+                                path: file.path,
+                                type: file.type
+                            },
+                            pytorchModel: {
+                                id: model.id,
+                                name: model.name,
+                                path: model.path
+                            },
+                            processingMethod: elements.processingMethod.value,
+                        };
+
+                        const result = await api.runPyTorchModel(config);
+
+                        // Update file status to success
+                        updateFileItemStatus(file.id, 'success');
+
+                        // Update results
+                        elements.resultsOutput.value += `✅ Success: ${file.name} + ${model.name}\n`;
+                        elements.resultsOutput.value += `${result.message}\n\n`;
+
+                    } catch (error) {
+                        // Update file status to error
+                        updateFileItemStatus(file.id, 'error');
+
+                        elements.resultsOutput.value += `❌ Error: ${file.name} + ${model.name}\n`;
+                        elements.resultsOutput.value += `   ${error.message}\n\n`;
+                    }
+
+                    elements.resultsOutput.scrollTop = elements.resultsOutput.scrollHeight;
                 }
-
-            } catch (error) {
-                // Hide loading overlay
-                hideLoadingOverlay();
-
-                elements.resultsOutput.value += `\n❌ Backend Error: ${error.message}\n`;
-            } finally {
-                // Re-enable run button
-                elements.runBtn.disabled = false;
-                elements.runBtn.classList.remove('btn-loading');
             }
+
+            // All processing completed
+            hideExecutingOverlay();
+
+            // Re-enable all buttons
+            elements.runBtn.disabled = false;
+            elements.runBtn.classList.remove('btn-loading');
+            elements.uploadBtn.disabled = false;
+            elements.uploadAndExportBtn.disabled = false;
+            elements.clearAllBtn.disabled = false;
+            elements.uploadBtn2.disabled = false;
+            elements.clearAllBtn2.disabled = false;
+
+            // Reset file statuses after a delay
+            setTimeout(() => {
+                const allFileItems = elements.filesContainer.querySelectorAll('.file-item');
+                allFileItems.forEach(item => {
+                    item.classList.remove('processing', 'success', 'error');
+                });
+            }, 5000);
+
         } else {
-            elements.resultsOutput.value += '❌ Cannot start analysis: Need at least one file AND one model selected.\n';
+            elements.resultsOutput.value += '❌ Cannot start analysis: Need at least one connectivity matrix AND one model selected.\n';
         }
 
         elements.resultsOutput.scrollTop = elements.resultsOutput.scrollHeight;
