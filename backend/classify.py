@@ -30,21 +30,10 @@ from scipy.io import loadmat
 from train import RegressionCNN
 
 
-def load_image_bytes(file_bytes: bytes) -> np.ndarray:
-    # Definimos el directorio tmp y lo creamos si no existe
-    tmp_dir = Path("tmp")
-    # tmp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generamos un nombre único
-    unique_name = f"{uuid.uuid4().hex}.mat"
-    tmp_path = tmp_dir / unique_name
-
-    # Escribimos el fichero
-    tmp_path.write_bytes(file_bytes)
+def load_matrix_mat(matrix_path) -> np.ndarray:
     # Cargamos el .mat
-    mat = loadmat(tmp_path, squeeze_me=True, struct_as_record=False)
+    mat = loadmat(matrix_path, squeeze_me=True, struct_as_record=False)
     connectivity = mat["connectivity"]
-
     return np.array(connectivity, dtype=np.float32)
 
 
@@ -61,7 +50,7 @@ def process_with_model(mat_array: np.ndarray, torch_model: torch.nn.Module, devi
     return classification
 
 
-def model_inference(image, model_path):
+def model_inference(matrix_path, model_path):
     # Inicializar dispositivo
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -74,9 +63,8 @@ def model_inference(image, model_path):
         raise HTTPException(status_code=500, detail=f"Error cargando modelo: {e}")
     model.eval()
 
-    file_bytes = image.read()
     try:
-        mat_array = load_image_bytes(file_bytes, image.filename)
+        mat_array = load_matrix_mat(matrix_path)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
