@@ -25,7 +25,8 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms
 from types import SimpleNamespace
-from CNN_pretrained_model.AD_pretrained_utilities import CNN  # Clase del modelo ADNI
+from ann4brains.ann4brains.nets import BrainNetCNN
+
 import torch.nn as nn
 from scipy.io import loadmat
 
@@ -42,54 +43,29 @@ if not os.path.isfile(weights_ad):
     raise RuntimeError(f"No se encontró el archivo de pesos AD en: {weights_ad}")
 
 # Definir parámetros de la CNN según arquitectura ADNI
-from types import SimpleNamespace
-
-param_ad = SimpleNamespace(
-    n_conv=8,
-    kernels=[(3, 3, 3)] * 8,
-    pooling=[
-        (4, 4, 4),
-        (0, 0, 0),
-        (3, 3, 3),
-        (0, 0, 0),
-        (2, 2, 2),
-        (0, 0, 0),
-        (2, 2, 2),
-        (0, 0, 0),
-    ],
-    in_channels=[1, 8, 8, 16, 16, 32, 32, 64],
-    out_channels=[8, 8, 16, 16, 32, 32, 64, 64],
-    dropout=0.0,
-    fweights=[256, 2],
-)
-
-
 # Inicializar dispositivo
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Cargar modelo ADNI preentrenado en CPU (carga inicial)
-model_ad = CNN(param_ad)
-checkpoint_ad = torch.load(weights_ad, map_location="cpu")
-model_ad.load_state_dict(checkpoint_ad)
-model_ad.eval()  # en CPU por defecto
+model = BrainNetCNN()
 
 # 2) Extrae cuántas entradas tenía la capa original
 #    En tu clase, `self.f[-1]` es el último nn.Linear
-old_last_fc = model_ad.f[-1]
+old_last_fc = model.f[-1]
 in_features = old_last_fc.in_features
 
 # 3) Sustituye esa capa por una secuencia Linear→Softmax
-model_ad.f[-1] = nn.Sequential(nn.Linear(in_features, 1), nn.Softmax(dim=1)).to(device)
+model.f[-1] = nn.Sequential(nn.Linear(in_features, 1), nn.Linear(dim=1)).to(device)
 
 # 4) (Opcional) Re-inicializa los pesos de la nueva capa
-nn.init.kaiming_normal_(model_ad.f[-1][0].weight, nonlinearity="linear")
-model_ad.f[-1][0].bias.data.zero_()
+nn.init.kaiming_normal_(model.f[-1][0].weight, nonlinearity="linear")
+model.f[-1][0].bias.data.zero_()
 
 
 # Mapear nombres de modelos disponibles a sus instancias y dispositivos
 # Cada entrada: (modelo, preferencia_cuda)
 dmodels = {
-    "pretrained_ad": (model_ad, True),  # cargar en GPU si se selecciona
+    "pretrained_ad": (model, True),  # cargar en GPU si se selecciona
     # "otro_modelo": (otro_modelo_instancia, False),
 }
 
