@@ -39,12 +39,20 @@ def load_matrix_mat(matrix_path) -> np.ndarray:
 
 def process_with_model(mat_array: np.ndarray, torch_model: torch.nn.Module, device):
     # 1. Convertir numpy array a tensor de Torch (float32)
-    tensor = torch.from_numpy(mat_array).float()
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize(
+                (246, 246)
+            ),  # Aseguramos que la imagen sea de tamaño 246x246
+        ]
+    )
+    tensor = transform(mat_array)
     print(f"Shape of tensor before unsqueeze: {tensor.shape}")  # (H, W)
 
     # 2. Añadir dimensión de canal y de batch
     #    Pasa de (H, W) → (1, 1, H, W) para que conv2d lo acepte
-    tensor = tensor.unsqueeze(0).unsqueeze(0)
+    tensor = tensor.unsqueeze(0)
     print(f"Shape of tensor after unsqueeze: {tensor.shape}")  # (1, 1, H, W)
 
     # 3. Mover al dispositivo (CPU/GPU)
@@ -56,7 +64,7 @@ def process_with_model(mat_array: np.ndarray, torch_model: torch.nn.Module, devi
         print(logits)
         score = logits.squeeze().item()
 
-    return {"disease_score": float(score)}
+    return {"disease_score": float(abs(score))}
 
 
 def model_inference(matrix_path, model_path):
@@ -86,7 +94,7 @@ def model_inference(matrix_path, model_path):
 
 if __name__ == "__main__":
     resultado = model_inference(
-        matrix_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\Dataset\\6\\whole_brain_ROIs.mat",
-        model_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\backend\\modelo.pth",
+        matrix_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\Dataset\\16\\whole_brain_ROIs.mat",
+        model_path="C:\\Users\\josev\\OneDrive\\Documentos\\MASTER\\BMIA\\Project\\BMIA-Project\\modelo_moca_29_05_1.pth",
     )
     print(resultado)

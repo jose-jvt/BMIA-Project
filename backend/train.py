@@ -22,8 +22,6 @@ def load_mat_file(path, data_key=None):
     # Elegir dato
     if data_key and data_key in mat:
         arr = mat[data_key]
-    elif "volume" in mat:
-        arr = mat["volume"]
     elif "connectivity" in mat:
         arr = mat["connectivity"]
     else:
@@ -54,7 +52,7 @@ class MatFolderDataset(Dataset):
         self.root_dir = root_dir
         self.ids = self.df["last3"].tolist()
         self.data_key = data_key
-        self.label_col = "Sexo"
+        self.label_col = "MoCA"
         self.transform = transform
 
     def __len__(self):
@@ -84,7 +82,7 @@ class MatFolderDataset(Dataset):
             arr = self.transform(arr)
 
         target = torch.tensor(label, dtype=torch.float32)
-        return arr, target
+        return arr, target / 30
 
 
 class RegressionCNN(nn.Module):
@@ -106,7 +104,8 @@ class RegressionCNN(nn.Module):
             nn.Linear(64 * 30 * 30, 128),
             nn.ReLU(inplace=True),
             nn.Linear(128, 1),
-            nn.Sigmoid(),
+            # nn.Softmax(dim=1),  # Cambiado a Softmax pasra regresión
+            # nn.Sigmoid(),  # Alternativa para regresión
         )
 
     def forward(self, x):
@@ -122,6 +121,7 @@ def train(model, loader, criterion, optimizer, device):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
+        # print(f"Outputs: {outputs}, targets: {targets}")
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -136,17 +136,20 @@ def validate(model, loader, criterion, device):
         for inputs, targets in loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
-            # print(f"Outputs: {outputs}, targets: {targets}")
+            print(f"Outputs: {outputs}, targets: {targets}")
             loss = criterion(outputs, targets)
             running_loss += loss.item() * inputs.size(0)
     return running_loss / len(loader.dataset)
 
 
 def main():
-    # Transforms: resize to 256x256, convert to tensor, normalize to [0,1]
+    # Transforms: resize to 246x246, convert to tensor, normalize to [0,1]
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
+            transforms.Resize(
+                (246, 246)
+            ),  # Aseguramos que la imagen sea de tamaño 246x246
         ]
     )
 
@@ -165,22 +168,22 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = RegressionCNN().to(device)
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00002)
+    criterion = nn.MSELoss()  # Usamos MSE para regresión
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
     best_val_loss = float("inf")
     for epoch in range(1, 1000 + 1):
         train_loss = train(model, train_loader, criterion, optimizer, device)
         val_loss = validate(model, val_loader, criterion, device)
         print(
-            f"Epoch {epoch}/{10000} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}"
+            f"Epoch {epoch}/{1000} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}"
         )
 
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), "modelo.pth")
-            print(f"Saved Best Model to {'modelo.pth'}")
+            torch.save(model.state_dict(), "modelo_moca_29_05.pth")
+            print(f"Saved Best Model to {'modelo_moca_29_05.pth'}")
 
 
 if __name__ == "__main__":
